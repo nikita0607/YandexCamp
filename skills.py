@@ -12,7 +12,7 @@ class Skills:
         Camera.reset_cam()
 
         def get_cdv():
-            Movement.set_speed(17)
+            Movement.set_speed(40)
             frame = None
             Camera.reset_cam()
             while frame is None:
@@ -29,18 +29,23 @@ class Skills:
             cords = cords[0]
             cdv =  cv - cords[cord_num]
             if cdv > 0:
-                Movement.move_sync(1 + 2 * (1 - cord_num))
+                Movement.move(1 + 2 * (1 - cord_num), 0.1*cdv/100)
             else:
-                Movement.move_sync(2 + 2 * (1 - cord_num))
+                Movement.move(2 + 2 * (1 - cord_num), 0.1*cdv/100)
             TCPSocket.update()
 
             return cdv
 
-
-
         cdv = abs(get_cdv())
         while cdv > dv:
+            while cdv > dv:
+                cdv = abs(get_cdv())
+                TCPSocket.sleep(0.2)
+            Movement.move_sync(0)
+            TCPSocket.sleep(0.5)
+
             cdv = abs(get_cdv())
+
 
 
     @staticmethod
@@ -88,6 +93,7 @@ class Skills:
         TCPSocket.sleep(abs(t))
 
         Movement.cam_rotate = DefaultAngles.CAM_CUBE_GRAB_ROTATE
+        Movement.set_speed(40)
         Movement.update_servo()
         TCPSocket.update()
 
@@ -97,19 +103,14 @@ class Skills:
         Movement.cam_pitch = DefaultAngles.CAM_CUBE_GRAB_PITCH
         Skills.move_to_obj_pipe_stage(obj)
 
-        if Detector.is_object_visible(3):
-            Grabbing.grab_obj(obj)
-        else:
-            print("NOT SEEE#!!")
-
     @staticmethod
     def move_to_obj_pipe_stage(obj=3):
         Movement.set_speed(5)
         TCPSocket.update()
 
         while 1:
-            while not Detector.is_object_visible(3):
-                crd = Skills.search_obj_pipe(3)
+            while not Detector.is_object_visible(obj):
+                crd = Skills.search_obj_pipe(obj)
                 TCPSocket.sleep(0.5)
                 if crd is not None:
                     Skills.rotate_to_searched(crd)
@@ -146,7 +147,7 @@ class Grabbing:
         Movement.hand_angle += 40
         Movement.update_servo()
         TCPSocket.sleep(0.5)
-        Movement.move(2, 1)
+        Movement.move(2, 2)
         Movement.first_angle = 180
         Movement.update_servo()
         TCPSocket.update()

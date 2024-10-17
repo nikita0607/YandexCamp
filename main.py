@@ -27,6 +27,12 @@ print("Camera inited")
 
 print("Start move pipeline")
 Skills.move_to_obj_pipe(3)
+if Detector.is_object_visible(3):
+    Grabbing.grab_obj(3)
+else:
+    print("NOT SEEE#!!")
+print("AA")
+Skills.move_to_obj_pipe(1)
 
 import keyboard_move
 keyboard_move.init()
