@@ -6,10 +6,17 @@ class DefaultAngles:
     CAM_ROTATE_MAX = 160
 
     CAM_CUBE_GRAB_ROTATE = 93
-    CAM_CUBE_GRAB_PITCH = 32
+    CAM_CUBE_GRAB_PITCH = 31
 
-    CAM_CUBE_GRAB_ST_2_ROTATE = 81
-    CAM_CUBE_GRAB_ST_2_PITCH = 23
+    CAM_BUTTON_PRESS_PITCH = 39
+    CAM_BUTTON_PRESS_ROTATE = 104
+
+    CAM_BALL_GRAB_ROTATE = 94
+    CAM_BALL_GRAB_PITCH = 30
+
+    CAM_DROP_BASKET_PITCH = 19
+
+    CAM_SEARCH_PITCH = 40
 
 
 class Movement:
@@ -19,12 +26,21 @@ class Movement:
     hand_angle = 85
 
     cam_pitch = DefaultAngles.CAM_CUBE_GRAB_PITCH
-
     cam_rotate = DefaultAngles.CAM_CUBE_GRAB_ROTATE
 
     @staticmethod
     def set_speed(speed):
-        command = b'\xff\x02\x02' + speed.to_bytes() + b'\xff' + b'\xff\x02\x01' + speed.to_bytes() + b'\xff'
+        Movement.set_speed_l(speed)
+        Movement.set_speed_r(speed)
+
+    @staticmethod
+    def set_speed_l(speed):
+        command = b'\xff\x02\x01' + speed.to_bytes() + b'\xff'
+        Tcp.send_buf(command)
+
+    @staticmethod
+    def set_speed_r(speed):
+        command = b'\xff\x02\x02' + speed.to_bytes() + b'\xff'
         Tcp.send_buf(command)
 
     @staticmethod

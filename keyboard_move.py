@@ -10,7 +10,7 @@ def init():
     print("Init keyboard movement")
     kb.add_hotkey('w', lambda: Movement().move_sync(1))
     kb.add_hotkey('s', lambda: Movement().move_sync(2))
-    kb.add_hotkey('a', lambda: Movement().move(3, 0))
+    kb.add_hotkey('a', lambda: (Movement.set_speed_l(20), Movement.set_speed_r(40)))
     kb.add_hotkey('d', lambda: Movement().move(4, 0))
 
     kb.add_hotkey('up', lambda: Movement().move_first_servo(2))
@@ -27,7 +27,7 @@ def init():
 
     kb.add_hotkey('space', lambda: Movement().move(0, 0))
 
-    kb.add_hotkey('1', lambda: Movement.set_speed(9))
+    kb.add_hotkey('1', lambda: (Movement.set_speed_l(20), Movement.set_speed_r(20)))
     kb.add_hotkey('0', lambda: Movement.set_speed(100))
     print('KB movement was init.')
 

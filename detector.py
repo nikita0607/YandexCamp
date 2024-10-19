@@ -3,7 +3,7 @@ import numpy as np
 import cv2
 
 import colors
-
+import urllib
 from ultralytics import YOLO
 
 class Camera:
@@ -14,32 +14,27 @@ class Camera:
 
     @classmethod
     def init_cam(cls, stream_url):
-        cls.cap = cv2.VideoCapture(stream_url)
         cls.stream_url = stream_url
-
-        if not cls.cap.isOpened():
-            print("Не удается подключиться к видеопотоку.")
-            exit()
-
-    @classmethod
-    def reset_cam(cls):
-        cls.cap.release()
-        cls.init_cam(cls.stream_url)
 
     @classmethod
     def get_frame(cls):
-        ret, frame = cls.cap.read()
+        req = urllib.request.urlopen(cls.stream_url)
+        arr = np.asarray(bytearray(req.read()), dtype=np.uint8)
+        frame = cv2.imdecode(arr, -1)
         cls.height, cls.width = frame.shape[:2]
+
+        # WIDTH = 320
+        # HEIGHT = 240
+        # resizedFrame = cv2.resize(frame, (WIDTH, HEIGHT))
 
         return frame
 
 
 class Detector:
-    model = YOLO('best-5n-30epoch.pt')
+    model = YOLO('best-5n-30epoch.onnx')
 
     @classmethod
     def is_object_visible(cls, obj):
-        Camera.reset_cam()
         frame = Camera.get_frame()
         cords = cls.detect_yolo_obj(frame, obj)
 
@@ -61,8 +56,8 @@ class Detector:
         for i in range(len(results)):
             if int(results[i].boxes.cls[0].item()) == obj:
                 obj_cords.append(results[i].boxes.xywh.numpy()[0])
-        cv2.imshow("Camera", results.plot())
-        cv2.waitKey(500)
+        # cv2.imshow("Camera", results.plot())
+        # cv2.waitKey(1)
 
         return obj_cords
 
@@ -71,10 +66,6 @@ class Detector:
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         ranges = colors.Ranges.red_range
 
-        # Определяем диапазон красного цвета в HSV (для разных оттенков красного)
-        # Красный в HSV представлен в двух диапазонах: низкий и высокий
-
-        # Маскируем изображение для двух диапазонов красного
         mask = None
         for rng in ranges:
             mask_r = cv2.inRange(hsv, rng[0], rng[1])
@@ -82,7 +73,6 @@ class Detector:
                 mask = cv2.bitwise_or(mask, mask_r)
             else:
                 mask = mask_r
-
 
         # Применение морфологической операции для улучшения маски (например, открытие)
         kernel = np.ones((5, 5), np.uint8)
@@ -107,10 +97,18 @@ class Detector:
             print("Красные пиксели не найдены.")
             return None
 
+# Detector.model.export(format="onnx", dynamic=True)
+
 
 if __name__ == '__main__':
-    Camera.init_cam('http://192.168.2.42:8080/?action=stream')
+    Camera.init_cam('http://192.168.2.42:8080/?action=snapshot')
     time.sleep(0.1)
+    WIDTH = 320
+    HEIGHT = 240
+
+    # Camera.cap.set(cv2.CAP_PROP_POS_FRAMES, 1)
+
     while 1:
         frame = Camera.get_frame()
-        Detector.detect_cube(frame)
+        resizedFrame = cv2.resize(frame, (WIDTH, HEIGHT))
+        Detector.detect_cube(resizedFrame)
