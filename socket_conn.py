@@ -4,6 +4,7 @@ import time
 
 from collections import deque
 
+import numpy as np
 
 commands = deque()
 
@@ -36,7 +37,7 @@ class TCPSocket(socket.socket):
     @classmethod
     def update(cls):
         s._send()
-        recv = s._recv()
+        # recv = s._recv()
         if cls.recv_callbacks:
             for calb in cls.recv_callbacks:
                 calb(recv)

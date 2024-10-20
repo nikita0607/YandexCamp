@@ -1,4 +1,3 @@
-from nltk.classify.util import wsd_demo
 
 from socket_conn import TCPSocket
 from detector import *
@@ -138,8 +137,7 @@ class Skills:
         else:
             Movement.move(4, abs(t))
 
-        Movement.move(0, abs(t))
-        TCPSocket.sleep(abs(t))
+        Movement.move_sync(0)
 
         Movement.cam_rotate = DefaultAngles.CAM_CUBE_GRAB_ROTATE
         Movement.set_speed(40)
@@ -212,7 +210,7 @@ class Grabbing:
         TCPSocket.sleep(0.2)
         Movement.move(1, 1)
         TCPSocket.sleep(1.3)
-        Movement.hand_angle += 40
+        Movement.hand_angle += 30
         Movement.update_servo()
         TCPSocket.sleep(0.5)
         Movement.move(2, 1)

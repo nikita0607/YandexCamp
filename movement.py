@@ -1,4 +1,4 @@
-from socket_conn import TCPSocket as Tcp
+from socket_conn import TCPSocket as Tcp, TCPSocket
 
 
 class DefaultAngles:
@@ -19,11 +19,14 @@ class DefaultAngles:
     CAM_SEARCH_PITCH = 40
 
 
+ROTATE_TIME = 4.2
+
+
 class Movement:
-    first_angle = 180
+    first_angle = 120
     second_angle = 180
     rotate_angle = 95
-    hand_angle = 85
+    hand_angle = 60
 
     cam_pitch = DefaultAngles.CAM_CUBE_GRAB_PITCH
     cam_rotate = DefaultAngles.CAM_CUBE_GRAB_ROTATE
@@ -39,8 +42,17 @@ class Movement:
         Tcp.send_buf(command)
 
     @staticmethod
+    def rotate(angle):
+        time = abs(angle)/360*ROTATE_TIME
+        if angle > 0:
+            Movement.move(4, time)
+        else:
+            Movement.move(3, time)
+        TCPSocket.sleep(time+0.1)
+
+    @staticmethod
     def set_speed_r(speed):
-        command = b'\xff\x02\x02' + speed.to_bytes() + b'\xff'
+        command = b'\xff\x02\x02' + (speed).to_bytes() + b'\xff'
         Tcp.send_buf(command)
 
     @staticmethod
@@ -50,6 +62,7 @@ class Movement:
 
     @staticmethod
     def move_sync(com: int):
+        print("MOVE")
         command = b'\xff\x00' + com.to_bytes() + b'\x00\xff'
         Tcp.send_buf(command)
 

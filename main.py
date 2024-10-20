@@ -45,7 +45,7 @@ while rep:
         Grabbing.grab_obj(3)
     else:
         print("NOT SEEE#!!")
-    TCPSocket.sleep(0.2)
+    TCPSocket.sleep(1)
     rep = Detector.is_object_visible(3)
     print("AA")
 
