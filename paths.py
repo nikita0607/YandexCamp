@@ -1,3 +1,4 @@
+import subprocess
 import time
 
 import ultralytics
@@ -5,12 +6,19 @@ import cv2
 from ultralytics import YOLO
 import numpy as np
 import math
+import matplotlib.pyplot as plt
+import os
 
 from movement import Movement
 from socket_conn import TCPSocket
 
-ip_camera_url_right = "rtsp://Admin:rtf123@192.168.2.250/251:554/1/1"# Создаем объект VideoCapture для захвата видео с IP-камеры
+from detector import Detector,Camera
+from skills import Skills, Grabbing
 
+ip_camera_url_right = "rtsp://Admin:rtf123@192.168.2.251/251:554/1/1"# Создаем объект VideoCapture для захвата видео с IP-камеры
+
+
+additional_point = []
 
 class UpCamera:
     @staticmethod
@@ -160,6 +168,8 @@ class AStarPath:
 
 ## основа
 
+
+
 # выравниваем картинку, если она под наклоном
 def rotate(img):
     def get_angle(img):
@@ -196,6 +206,9 @@ def build_map(image):
     # ищем преграды и прочее
     cube_boxes = []
     robot_boxes = []
+    button_boxes = []
+    basket_boxes = []
+
     image_patched = image.copy()
     for box, cls in zip(boxes, classes):
         label = f"{names[int(cls)]}"
@@ -210,6 +223,12 @@ def build_map(image):
             cv2.rectangle(image_patched, (x1, y1), (x2, y2), color=(255, 255, 255), thickness=-1)
         elif label == 'red_button' or label == 'pink_button':
             cv2.rectangle(image_patched, (x1, y1), (x2, y2), color=(0, 0, 0), thickness=-1)
+        elif label == 'green_button' or label == 'blue_button':
+            cv2.rectangle(image_patched, (x1, y1), (x2, y2), color=(0, 0, 0), thickness=-1)
+            button_boxes.append(box)
+        elif label == 'basket':
+            cv2.rectangle(image_patched, (x1, y1), (x2, y2), color=(0, 0, 0), thickness=-1)
+            button_boxes.append(box)
 
     # трешхолдим и создаём сам лабиринт
     gray = cv2.cvtColor(image_patched, cv2.COLOR_BGR2GRAY)
@@ -220,7 +239,7 @@ def build_map(image):
     img_opened = cv2.morphologyEx(img_binary, cv2.MORPH_OPEN, kernel_open)
     img_closed = cv2.morphologyEx(img_opened, cv2.MORPH_CLOSE, kernel_close)
 
-    return img_closed, robot_boxes, cube_boxes
+    return img_closed, robot_boxes, cube_boxes, button_boxes, basket_boxes
 
 def cubes_preprocessing(cube_boxes, robot_boxes):
     # делаем так, что первый куб всегда тот, что находится левее
@@ -242,6 +261,9 @@ def cubes_preprocessing(cube_boxes, robot_boxes):
         else:
             cube_type = 'inner_upper_left_lower_right'
 
+    rc1 = center_1.copy()
+    rc2 = center_2.copy()
+
     # безопасные точки
     robot_radius = abs(robot_boxes[0][0] - robot_boxes[0][2]) / 2
     if cube_type == 'inner_lower_left_upper_right':
@@ -256,13 +278,13 @@ def cubes_preprocessing(cube_boxes, robot_boxes):
         center_2[0] -= robot_radius
         center_2[1] -= robot_radius
 
-    return center_1, center_2
+    return rc1, rc2, center_1, center_2
 
 
 def plan_path(map_image, robot, endpoint, new_width=320):
-    new_height = int(new_width * image.shape[0] / image.shape[1])
-    ratio_width = image.shape[1] / new_width
-    ratio_height = image.shape[0] / new_height
+    new_height = int(new_width * map_image.shape[0] / map_image.shape[1])
+    ratio_width = map_image.shape[1] / new_width
+    ratio_height = map_image.shape[0] / new_height
 
     # до сжатия; изначальные координаты центра робота
     start_x = robot[0] + abs(robot[0] - robot[2]) / 2
@@ -270,14 +292,14 @@ def plan_path(map_image, robot, endpoint, new_width=320):
 
     # после сжатия
     start_x = start_x / ratio_width
-    start_y = (image.shape[0] - start_y) / ratio_height
+    start_y = (map_image.shape[0] - start_y) / ratio_height
 
     end_x = endpoint[0] / ratio_width
-    end_y = (image.shape[0] - endpoint[1]) /  ratio_height
+    end_y = (map_image.shape[0] - endpoint[1]) /  ratio_height
 
     grid_size = 4.0
     robot_radius = abs(robot[0] - robot[2]) / (2 * ratio_width)
-    robot_radius = 7.8  # TODO: безопасный радиус для робота (зависит от силы сжатия поля)
+    robot_radius = 7.4  # TODO: безопасный радиус для робота (зависит от силы сжатия поля)
     print(f'robot radius (with ratio) = {robot_radius}')
 
     field = cv2.resize(map_image, (new_width, new_height))
@@ -289,9 +311,54 @@ def plan_path(map_image, robot, endpoint, new_width=320):
                 y_obstacle.append(new_height-i)
                 x_obstacle.append(j)
 
+    # plt.plot(x_obstacle, y_obstacle, '.k')
+    # plt.plot(start_x, start_y, 'og')
+    # plt.plot(end_x, end_y, 'xb')
+    # plt.grid(True)
+    # plt.axis('equal')
+
     start = time.time()
-    a_star = AStarPath(robot_radius, grid_size, x_obstacle, y_obstacle, False)
-    x_out_path, y_out_path = a_star.a_star_search(start_x, start_y, end_x, end_y)
+    # a_star = AStarPath(robot_radius, grid_size, x_obstacle, y_obstacle, False)
+    # x_out_path, y_out_path = a_star.a_star_search(start_x, start_y, end_x, end_y)
+
+    x_obstacle = np.array(x_obstacle)
+    y_obstacle = np.array(y_obstacle)
+
+    file_path = "x_obstacles.txt"
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.truncate()
+        file.write(' '.join(map(str, x_obstacle)) + '\n')
+
+    file_path = "y_obstacles.txt"
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.truncate()
+        file.write(' '.join(map(str, y_obstacle)) + '\n')
+
+    meta = [robot_radius, grid_size, start_x, start_y, end_x, end_y]
+    file_path = 'meta.txt'
+    with open(file_path, "w", encoding="utf-8") as file:
+        file.truncate()
+        file.write(' '.join(map(str, meta)) + '\n')
+
+
+    # path planning
+    # os.startfile('a.bat')
+    print(subprocess.call(["a.bat"]))
+    os.remove("x_obstacles.txt")
+    os.remove("y_obstacles.txt")
+    os.remove("meta.txt")
+
+    with open('x_out_path.txt', 'r') as file:
+        content = file.read()
+        x_out_path = [int(num) for num in content.split()]
+
+    with open('y_out_path.txt', 'r') as file:
+        content = file.read()
+        y_out_path = [int(num) for num in content.split()]
+
+    os.remove("x_out_path.txt")
+    os.remove("y_out_path.txt")
+
     print(f'time taken: {time.time() - start} s')
 
     # АППРОКСИМАЦИЯ
@@ -302,7 +369,7 @@ def plan_path(map_image, robot, endpoint, new_width=320):
 
     start = time.time()
     path_len = cv2.arcLength(new_path_array, closed=False)
-    epsilon = 0.015 * path_len
+    epsilon = 0.02 * path_len
     approx = cv2.approxPolyDP(new_path_array, epsilon, closed=False)
     print(f'approx time: {time.time() - start} s')
 
@@ -314,7 +381,18 @@ def plan_path(map_image, robot, endpoint, new_width=320):
             x_app.append(approx[i][j][0])
             y_app.append(approx[i][j][1])
 
+    c = plt.Circle((start_x, start_y), robot_radius)
+    plt.gca().add_patch(c)
+    plt.plot(x_out_path, y_out_path, 'r')
+    plt.plot(x_app, y_app, 'r')
+
+    plt.plot(x_out_path, new_height - np.array(y_out_path), 'r')
+    plt.plot(x_app, new_height - np.array(y_app), 'r')
+    plt.show()
+
     return x_app, y_app, np.array(x_app) * ratio_width, np.array(y_app) * ratio_height
+
+
 
 # для случая после выравнивания относительно вертикальной оси
 def angles(x_coords, y_coords):
@@ -341,46 +419,115 @@ def times(x_coords, y_coords, velocity):
         times.append(time)
     return times
 
+def path_movement():
+    TCPSocket.sleep(3)
+
+    frame = UpCamera.get_frame()
+
+    image = frame.copy()  # TODO: подумать над поворотами
+
+    map_image, robots, cubes, green_buttons, baskets = build_map(image)
+    rc1, rc2, center_1, center_2 = cubes_preprocessing(cubes, robots)
+
+    cv2.imshow("BOBOBO", image)
+    cv2.waitKey(2000)
+
+    for i, el in enumerate(robots):
+        print(i, el)
+        _img = cv2.rectangle(image.copy(), (int(el[0]), int(el[1])), (int(el[2]), int(el[3])), (0, 0, 0), thickness=5)
+        _img = cv2.resize(_img, [640, 480])
+
+        cv2.imshow("BOBOBO", _img)
+        cv2.waitKey(2000)
+
+    robot = robots[int(input("Enter index: "))]
+
+    # calculate the path
+    x, y, x_big, y_big = plan_path(map_image, robot, center_1, new_width=360)
+
+    plt.imshow(image)
+    plt.scatter(rc1[0], rc1[1])
+    plt.plot(x_big, image.shape[0] - np.array(y_big), 'r')
+    plt.show()
+
+    # углы поворота и время езды
+    a1 = np.hstack((x_big, np.array(x_big[-1])))
+    a2 = np.hstack((y_big, y_big[-1] - 20))
+    print(x_big, a1)
+
+    angl = angles(a1, a2)[::-1]
+    tms = times(x_big, y_big, 90)[::-1]
+
+    print('angles: ', angl)
+    print("tmsa: ", tms)
+
+    # print('INITIAL angle: ', angl[i].item())
+    # Movement.rotate(angl[0].item())
+
+    print('=== START OF MOVEMENT ===')
+    for i in range(max(len(angl), len(tms))):
+        print('i: ', i)
+
+        if i > 3:
+            return False
+
+        if (i < len(angl)):
+            print('angle: ', angl[i].item())
+            Movement.rotate(angl[i].item())
+        if (i < len(tms)):
+            if tms[i] < 5:
+                Movement.move(1, tms[i].item())
+                TCPSocket.sleep(tms[i].item())
+            else:
+                Movement.move_sync(1)
+                print('time: ', tms[i])
+                TCPSocket.sleep(tms[i].item())
+                Movement.move_sync(0)
+            TCPSocket.sleep(0.5)
+
+    print(f'angles: {angl}')
+    print(f'times: {tms}')
+
+    print('=== END OF MOVEMENT ===')
+    return True
+
 
 robot_color = 'green'  # TODO
 model = YOLO("best-top-down-5n-100epoch.pt")
 
 if __name__ == '__main__':
     TCPSocket.connect_to('192.168.2.42', 2001)
-    TCPSocket.send_buf(b'\xff\x06\x02\x00\xff')
+    TCPSocket.send_buf(b'\xff\x06\x05\x00\xff')
     Movement().update_servo()
+    Movement.set_speed(40)
     TCPSocket.update()
 
-    frame = UpCamera.get_frame()
-    cv2.imshow("AA", frame)
-    cv2.waitKey(500)
-    time.sleep(1)
+    while not path_movement():
+        pass
 
-    image = rotate(frame)
+    stream_url = 'http://192.168.2.42:8080/?action=snapshot'
 
-    map_image, robots, cubes = build_map(image)
-    center_1, center_2 = cubes_preprocessing(cubes, robots)
-    x, y, x_big, y_big = plan_path(map_image, robots[1], center_2, new_width=360)
-    # print(x, y)
+    print("Init camera")
+    cam = Camera.init_cam(stream_url)
+
+    for i in range(8):
+        Skills.search_obj_pipe(3)
+        if Detector.is_object_visible(3):
+            break
+        Movement.rotate(45)
+
+    rep = 1
+    while rep:
+        Skills.move_to_obj_pipe(3, ady=40)
+        if Detector.is_object_visible(3):
+            Grabbing.grab_obj(3)
+        else:
+            print("NOT SEEE#!!")
+        TCPSocket.sleep(2)
+        rep = Detector.is_object_visible(3)
+        print("AA")
 
 
-
-    angl = angles(x_big, y_big)
-    # angles.insert(0, 0)
-    tms = times(x_big, y_big, 60)
-
-    for i in range(max(len(angl), len(tms))):
-        if (i < len(tms)):
-            Movement.move_sync(1)
-            TCPSocket.sleep(tms[i].item())
-            Movement.move_sync(0)
-        if (i < len(angl)):
-            print(angl[i].item())
-            Movement.rotate(angl[i].item())
-            TCPSocket.sleep(angl[i].item())
-
-    print(f'angles: {angl}')
-    print(f'times: {tms}')
 
 
 

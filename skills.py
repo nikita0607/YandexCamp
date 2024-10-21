@@ -15,12 +15,12 @@ Ki = Kp/Ti
 class Skills:
     cam = None
     @staticmethod
-    def move_to_obj(cord_num=0, move_val=0.02, adx=20, max_iter=0, p=0.008, obj=3, sonar_stop=False):
+    def move_to_obj(cord_num=0, move_val=0.02, adx=20, ady=20, max_iter=0, p=0.008, obj=3, sonar_stop=False):
         Movement.set_speed(8)
-        cdx = 40
-        cdy = 40
+        cdx = adx*2
+        cdy = ady*2
 
-        while abs(cdx) > 20 and abs(cdy) > 20:
+        while abs(cdx) > adx and abs(cdy) > ady:
             frame = None
             while frame is None:
                 frame = Camera.get_frame()
@@ -44,8 +44,6 @@ class Skills:
             global dx_pred
 
             ws = 0.092
-            adx = 20
-            ady = 20
 
             linear = abs(cdy)*0.15
 
@@ -88,8 +86,6 @@ class Skills:
 
     @staticmethod
     def search_obj_pipe(obj):
-        lpitch = Movement.cam_pitch
-
         Movement.cam_pitch = DefaultAngles.CAM_SEARCH_PITCH
         Movement.update_servo()
         TCPSocket.update()
@@ -114,7 +110,6 @@ class Skills:
             if cr is not None:
                 return cr
 
-        Movement.cam_pitch = lpitch
         Movement.update_servo()
         TCPSocket.update()
 
@@ -132,20 +127,22 @@ class Skills:
         rscreen = -(cords[0] - (Camera.width // 2)) // (Camera.width // 2) * 25
 
         t = (rscreen*k1 + rang*k2) * k3
-        if t > 0:
-            Movement.move(3, abs(t))
-        else:
-            Movement.move(4, abs(t))
+        print("RANG : ", rang)
+        Movement.rotate(-rang)
 
-        Movement.move_sync(0)
-
-        Movement.cam_rotate = DefaultAngles.CAM_CUBE_GRAB_ROTATE
-        Movement.set_speed(40)
-        Movement.update_servo()
-        TCPSocket.update()
+        TCPSocket.sleep(1)
 
     @staticmethod
-    def setup_move_pipeline(obj):
+    def setup_move_pipeline(obj, start_cam_pose=None):
+        if start_cam_pose:
+            Movement.cam_pitch = start_cam_pose[0]
+            Movement.cam_rotate = start_cam_pose[1]
+
+            Movement.update_servo()
+            TCPSocket.update()
+
+            return
+
         Movement.cam_rotate = DefaultAngles.CAM_CUBE_GRAB_ROTATE
         Movement.cam_pitch = DefaultAngles.CAM_CUBE_GRAB_PITCH
         if obj == 1:
@@ -161,12 +158,12 @@ class Skills:
         TCPSocket.update()
 
     @staticmethod
-    def move_to_obj_pipe(obj=3, dv=40, max_iter=0):
-        Skills.setup_move_pipeline(obj)
-        Skills.move_to_obj_pipe_stage(obj, dv, max_iter)
+    def move_to_obj_pipe(obj=3, adx=40, ady=40, max_iter=0, start_cam_pose=None):
+        Skills.setup_move_pipeline(obj, start_cam_pose=start_cam_pose)
+        Skills.move_to_obj_pipe_stage(obj, adx=adx, ady=ady, max_iter=max_iter, start_cam_pose=start_cam_pose)
 
     @staticmethod
-    def move_to_obj_pipe_stage(obj=3, dv=40, max_iter=0, should_ret=False):
+    def move_to_obj_pipe_stage(obj=3, adx=40, ady=40, max_iter=0, should_ret=False, start_cam_pose=None):
         TCPSocket.update()
 
         while 1:
@@ -178,17 +175,19 @@ class Skills:
                     if should_ret:
                         Skills.setup_move_pipeline(obj)
                         return
-                    Skills.move_to_obj_pipe_stage(obj, should_ret=True)
-                    Skills.setup_move_pipeline(obj)
+                    Skills.move_to_obj_pipe_stage(obj, adx, ady, should_ret=True, start_cam_pose=start_cam_pose)
+                    Skills.setup_move_pipeline(obj, start_cam_pose)
+                    TCPSocket.sleep(1)
                 else:
                     return 0
 
-            a = Skills.move_to_obj(adx=dv, move_val=0.03, obj=obj, max_iter=max_iter)
-            b = Skills.move_to_obj(1, adx=dv, move_val=0.05, obj=obj, p=0.03, max_iter=max_iter)
-            a = Skills.move_to_obj(adx=dv, move_val=0.03, obj=obj, p=0.008, max_iter=max_iter)
-            b = Skills.move_to_obj(1, adx=dv, move_val=0.05, obj=obj, p=0.02, max_iter=max_iter)
+            a = Skills.move_to_obj(adx=adx, ady=ady, move_val=0.03, obj=obj, max_iter=max_iter)
+            b = Skills.move_to_obj(1, adx=adx, ady=ady, move_val=0.05, obj=obj, p=0.03, max_iter=max_iter)
+            a = Skills.move_to_obj(adx=adx, ady=ady, move_val=0.03, obj=obj, p=0.008, max_iter=max_iter)
+            b = Skills.move_to_obj(1, adx=adx, ady=ady, move_val=0.05, obj=obj, p=0.02, max_iter=max_iter)
 
             if Detector.is_object_visible(obj):
+                Skills.setup_move_pipeline(obj, start_cam_pose)
                 return 1
 
 
@@ -223,7 +222,7 @@ class Grabbing:
     def drop_to_basket():
         Movement.first_angle = 100
         Movement.update_servo()
-        TCPSocket.sleep(0.5)
+        TCPSocket.sleep(1)
         Movement.hand_angle = 20
         Movement.update_servo()
         TCPSocket.update()

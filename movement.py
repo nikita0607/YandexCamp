@@ -14,16 +14,16 @@ class DefaultAngles:
     CAM_BALL_GRAB_ROTATE = 94
     CAM_BALL_GRAB_PITCH = 30
 
-    CAM_DROP_BASKET_PITCH = 19
+    CAM_DROP_BASKET_PITCH = 22
 
     CAM_SEARCH_PITCH = 40
 
 
-ROTATE_TIME = 4.2
+ROTATE_TIME = 4.15
 
 
 class Movement:
-    first_angle = 120
+    first_angle = 150
     second_angle = 180
     rotate_angle = 95
     hand_angle = 60
@@ -140,6 +140,6 @@ class Movement:
 
 if __name__ == '__main__':
     Tcp.connect_to('192.168.2.42', 2001)
-    Tcp.send_buf(b'\xff\x06\x02\x00\xff')
+    Tcp.send_buf(b'\xff\x06\x01\x00\xff')
     Movement().update_servo()
     Tcp.update()

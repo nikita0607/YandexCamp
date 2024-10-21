@@ -13,9 +13,9 @@ Movement.update_servo()
 TCPSocket.sleep(0.1)
 
 # Первая команда
-speed = 60
+speed = 40
 Movement.set_speed(speed)
-TCPSocket.send_buf(b'\xff\x06\x02\x00\xff')
+TCPSocket.send_buf(b'\xff\x06\x01\x00\xff')
 
 print("Load model...")
 from detector import *
@@ -40,16 +40,18 @@ print("Start move pipeline")
 
 rep = 1
 while rep:
-    Skills.move_to_obj_pipe(3, dv=30)
+    Skills.move_to_obj_pipe(3, ady=40)
     if Detector.is_object_visible(3):
         Grabbing.grab_obj(3)
     else:
         print("NOT SEEE#!!")
-    TCPSocket.sleep(1)
+    TCPSocket.sleep(2)
     rep = Detector.is_object_visible(3)
     print("AA")
 
-Skills.move_to_obj_pipe(1, 40)
+angls = (DefaultAngles.CAM_DROP_BASKET_PITCH+5, DefaultAngles.CAM_CUBE_GRAB_ROTATE)
+Skills.move_to_obj_pipe(1, 40, ady=40, start_cam_pose=angls)
+Skills.move_to_obj_pipe(1, 40, ady=40)
 if Detector.is_object_visible(1):
     Movement.cam_pitch = DefaultAngles.CAM_DROP_BASKET_PITCH
     Movement.update_servo()

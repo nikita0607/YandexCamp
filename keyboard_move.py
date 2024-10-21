@@ -36,6 +36,5 @@ if __name__ == '__main__':
     port = 2001
     TCPSocket.connect_to(host, port)
     init()
-    Movement.rotate(45)
     while 1:
         TCPSocket.sleep(0.1)

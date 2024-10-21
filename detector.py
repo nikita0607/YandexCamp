@@ -51,7 +51,7 @@ class Detector:
 
     @classmethod
     def detect_yolo_obj(cls, img: np.ndarray, obj=3):
-        results = cls.model.predict(img)[0]
+        results = cls.model.predict(img, verbose=False)[0]
         obj_cords = []
         for i in range(len(results)):
             if int(results[i].boxes.cls[0].item()) == obj:
